@@ -156,6 +156,47 @@ local pulse_bright = {}
 for c = 1, COLS do pulse_bright[c] = 0 end
 
 -- ─────────────────────────────────────────────
+-- HELPERS
+-- (midi_to_hz and midi_note_on defined here so CHORD PROGRESSIONS can use them)
+-- ─────────────────────────────────────────────
+local function midi_to_hz(note)
+  return 440 * (2 ^ ((note - 69) / 12))
+end
+
+local function build_note_pool(scale, oct_low, oct_high)
+  local pool, seen = {}, {}
+  for oct = oct_low, oct_high do
+    for _, iv in ipairs(scale.intervals) do
+      local note = scale.root + iv + (oct * 12)
+      if note >= 24 and note <= 72 and not seen[note] then
+        seen[note] = true; table.insert(pool, note)
+      end
+    end
+  end
+  table.sort(pool)
+  return pool
+end
+
+local function classify_note(note, scale)
+  local iv = (note%12 - scale.root%12 + 12) % 12
+  if iv==0 then return "root"
+  elseif iv==7 then return "fifth"
+  elseif iv==6 then return "blue"
+  else return "other" end
+end
+
+-- ─────────────────────────────────────────────
+-- MIDI OUT
+-- ─────────────────────────────────────────────
+local function midi_note_on(note, vel)
+  if m then m:note_on(note, vel or 100, MIDI_CH) end
+end
+
+local function midi_note_off(note)
+  if m then m:note_off(note, 0, MIDI_CH) end
+end
+
+-- ─────────────────────────────────────────────
 -- CHORD PROGRESSIONS
 -- ─────────────────────────────────────────────
 local min7  = {0,3,7,10}
@@ -265,35 +306,6 @@ local function start_prog()
 end
 
 -- ─────────────────────────────────────────────
--- HELPERS
--- ─────────────────────────────────────────────
-local function midi_to_hz(note)
-  return 440 * (2 ^ ((note - 69) / 12))
-end
-
-local function build_note_pool(scale, oct_low, oct_high)
-  local pool, seen = {}, {}
-  for oct = oct_low, oct_high do
-    for _, iv in ipairs(scale.intervals) do
-      local note = scale.root + iv + (oct * 12)
-      if note >= 24 and note <= 72 and not seen[note] then
-        seen[note] = true; table.insert(pool, note)
-      end
-    end
-  end
-  table.sort(pool)
-  return pool
-end
-
-local function classify_note(note, scale)
-  local iv = (note%12 - scale.root%12 + 12) % 12
-  if iv==0 then return "root"
-  elseif iv==7 then return "fifth"
-  elseif iv==6 then return "blue"
-  else return "other" end
-end
-
--- ─────────────────────────────────────────────
 -- LAYOUT
 -- ─────────────────────────────────────────────
 local function generate_layout(scale, oct_off)
@@ -347,17 +359,6 @@ local function ripple_brightness(gx, gy, rip)
     return math.floor(12 * fade * (1 - diff/1.2))
   end
   return 0
-end
-
--- ─────────────────────────────────────────────
--- MIDI OUT
--- ─────────────────────────────────────────────
-local function midi_note_on(note, vel)
-  if m then m:note_on(note, vel or 100, MIDI_CH) end
-end
-
-local function midi_note_off(note)
-  if m then m:note_off(note, 0, MIDI_CH) end
 end
 
 -- ─────────────────────────────────────────────
