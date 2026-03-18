@@ -146,7 +146,15 @@ local arp_mode_idx = 1
 local wah_rate  = 2.0
 local wah_depth = 4000
 local wah_base  = 1000
+local wah_cc    = 11  -- MIDI CC for wah depth control
 local bpm       = 120.0
+
+-- per-voice octave offsets for layering
+local voice_octave_offsets = {0, 0, 0, 0}
+
+-- chord lock state
+local chord_lock = false
+local locked_chord_idx = 1
 
 local ripples      = {}
 local ripple_clock = nil
@@ -277,6 +285,7 @@ local function prog_build_chord()
 end
 
 local function prog_advance()
+  if chord_lock then return end  -- skip advance if chord is locked
   local prog = progressions[prog_index]
   prog_chord = (prog_chord % #prog.chords) + 1
   prog_build_chord()
@@ -334,6 +343,26 @@ local function generate_layout(scale, oct_off)
   return notes, bright, rel
 end
 
+-- build visual representation of all scale-legal notes (dim level 3)
+local function build_scale_visual(scale, oct_off)
+  local visual = {}
+  local pool = build_note_pool(scale, oct_off, oct_off+3)
+  local pool_set = {}
+  for _, n in ipairs(pool) do pool_set[n] = true end
+
+  for r = 1, PLAY_ROWS do
+    visual[r] = {}
+    for c = 1, COLS do
+      if grid_notes[r] and grid_notes[r][c] and pool_set[grid_notes[r][c]] then
+        visual[r][c] = 3  -- dim level for scale-legal notes
+      else
+        visual[r][c] = 0
+      end
+    end
+  end
+  return visual
+end
+
 -- ─────────────────────────────────────────────
 -- RIPPLE
 -- ─────────────────────────────────────────────
@@ -368,8 +397,11 @@ local function trigger_note(note, rel, gx, gy)
   engine.voice(current_voice)
   engine.env_shape(env_shape)
   engine.amp(params:get("amp"))
-  engine.note_on(midi_to_hz(note), rel or 0.3)
-  midi_note_on(note)
+  -- apply per-voice octave offset
+  local octave_shift = voice_octave_offsets[current_voice] * 12
+  local shifted_note = note + octave_shift
+  engine.note_on(midi_to_hz(shifted_note), rel or 0.3)
+  midi_note_on(shifted_note)
   if gx and gy then add_ripple(gx, gy) end
 end
 
@@ -449,6 +481,10 @@ local function grid_redraw()
   if not g then return end
   g:all(0)
   draw_voice_row()
+
+  -- build and cache scale visual
+  local scale_visual = build_scale_visual(current_scale, oct_offset)
+
   for r = 1, PLAY_ROWS do
     local gr = r+1
     for c = 1, COLS do
@@ -456,6 +492,9 @@ local function grid_redraw()
       if grid_notes[r] and grid_notes[r][c] then
         local key = r.."_"..c
         base = held_notes[key] and 15 or grid_bright[r][c]
+      else
+        -- show dimly-lit scale-legal notes even when not held
+        base = scale_visual[r] and scale_visual[r][c] or 0
       end
       local rval = 0
       for _, rip in ipairs(ripples) do
@@ -567,6 +606,14 @@ function redraw()
                  or "sustained"
   screen.text_right(shape_str)
 
+  -- show per-voice octave offset
+  screen.font_size(7)
+  screen.level(3)
+  screen.move(0, 40)
+  local v_off = voice_octave_offsets[current_voice]
+  local v_off_str = (v_off > 0 and "+" or "") .. tostring(v_off)
+  screen.text("voice oct: " .. v_off_str)
+
   screen.level(2)
   screen.move(0, 36)
   screen.line(128, 36)
@@ -585,6 +632,11 @@ function redraw()
     screen.move(40, 61)
     local ch = progressions[prog_index].chords[prog_chord]
     screen.text(ch[3] .. "  " .. prog_div_opts[prog_div_idx] .. "b")
+
+    -- chord lock indicator
+    screen.level(chord_lock and 15 or 3)
+    screen.move(110, 61)
+    screen.text("LOCK")
   elseif arp_on then
     screen.font_size(14)
     screen.level(15)
@@ -670,28 +722,54 @@ end
 -- ─────────────────────────────────────────────
 -- NORNS KEYS
 -- ─────────────────────────────────────────────
+-- track key hold for K2 long-press
+local key2_down_time = 0
+local key2_threshold = 0.8  -- 800ms for long-press
+
 function key(n, z)
-  if z ~= 1 then return end
   if n == 1 then
-    prog_on = not prog_on
-    if prog_on then
-      prog_index = math.random(#progressions)
-      prog_chord = 1
-      start_prog()
-    else
-      stop_prog()
+    if z == 1 then
+      prog_on = not prog_on
+      if prog_on then
+        prog_index = math.random(#progressions)
+        prog_chord = 1
+        start_prog()
+      else
+        stop_prog()
+      end
+      redraw()
     end
-    redraw()
   elseif n == 2 then
-    current_scale = scale_defs[math.random(#scale_defs)]
-    current_lenny = lenny_faces[math.random(#lenny_faces)]
-    grid_notes, grid_bright, note_release =
-      generate_layout(current_scale, oct_offset)
-    redraw()
+    if z == 1 then
+      key2_down_time = 0
+      clock.run(function()
+        while key2_down_time < key2_threshold and key2_down_time >= 0 do
+          clock.sleep(0.05)
+          key2_down_time = key2_down_time + 0.05
+        end
+        if key2_down_time >= key2_threshold and prog_on then
+          -- K2 long-press: toggle chord lock
+          chord_lock = not chord_lock
+          redraw()
+        end
+      end)
+    else
+      if key2_down_time < key2_threshold then
+        -- K2 short press: new scale
+        current_scale = scale_defs[math.random(#scale_defs)]
+        current_lenny = lenny_faces[math.random(#lenny_faces)]
+        grid_notes, grid_bright, note_release =
+          generate_layout(current_scale, oct_offset)
+        redraw()
+      end
+      key2_down_time = -1
+    end
   elseif n == 3 then
-    arp_on = not arp_on
-    if arp_on then start_arp() else stop_arp() end
-    redraw()
+    if z == 1 then
+      arp_on = not arp_on
+      if arp_on then start_arp() else stop_arp() end
+      redraw()
+    end
   end
 end
 
@@ -740,8 +818,9 @@ function enc(n, d)
       wah_depth = math.max(200, math.min(7000, wah_depth + d*60))
       update_wah()
     else
-      env_shape = math.max(0, math.min(1, env_shape + d*0.05))
-      engine.env_shape(env_shape)
+      -- E3 fine adjust: control per-voice octave offset
+      voice_octave_offsets[current_voice] =
+        math.max(-2, math.min(2, voice_octave_offsets[current_voice] + (d>0 and 1 or -1)))
     end
   end
 
@@ -759,6 +838,12 @@ m.event = function(data)
   elseif msg.type == "stop" then
     if arp_on then stop_arp(); start_arp() end
     if prog_on then stop_prog(); start_prog() end
+  elseif msg.type == "cc" then
+    -- handle wah depth from external MIDI CC
+    if msg.cc == wah_cc then
+      wah_depth = util.linlin(0, 127, 200, 7000, msg.val)
+      update_wah()
+    end
   end
 end
 
@@ -777,6 +862,21 @@ local function setup_params()
   params:set_action("gg_clock_source", function(v)
     clock.source = (v==1 and "internal" or "midi")
   end)
+
+  -- per-voice octave offset controls
+  params:add_separator("voice octaves")
+  for v = 1, 4 do
+    params:add_number("voice"..v.."_oct_offset", "voice "..v.." octave",
+      -2, 2, 0)
+    params:set_action("voice"..v.."_oct_offset", function(val)
+      voice_octave_offsets[v] = val
+    end)
+  end
+
+  -- wah CC control
+  params:add_separator("wah & midi")
+  params:add_number("wah_cc", "wah CC", 1, 127, 11)
+  params:set_action("wah_cc", function(val) wah_cc = val end)
 end
 
 -- ─────────────────────────────────────────────
