@@ -729,7 +729,10 @@ local key2_threshold = 0.8  -- 800ms for long-press
 
 function key(n, z)
   if n == 1 then
-    if z == 1 then
+    k1_held = (z == 1)
+    return
+  elseif n == 2 then
+    if z == 1 and k1_held then
       prog_on = not prog_on
       if prog_on then
         prog_index = math.random(#progressions)
@@ -739,8 +742,8 @@ function key(n, z)
         stop_prog()
       end
       redraw()
+      return
     end
-  elseif n == 2 then
     if z == 1 then
       key2_down_time = 0
       clock.run(function()
