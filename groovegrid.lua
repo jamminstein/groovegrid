@@ -926,6 +926,7 @@ function cleanup()
   if ripple_clock then clock.cancel(ripple_clock) end
   if m then
     for note = 0, 127 do m:note_off(note, 0, MIDI_CH) end
+    for ch=1,16 do m:cc(123,0,ch) end
   end
   if opxy_out then for ch=1,16 do opxy_out:cc(123,0,ch) end end
 end
