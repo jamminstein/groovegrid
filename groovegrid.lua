@@ -13,10 +13,10 @@ local m = midi.connect()
 -- LENNY FACES
 -- ─────────────────────────────────────────────
 local lenny_faces = {
-  "( ͡° ͜ʖ ͡°)", "( ͡~ ͜ʖ ͡°)", "( ͠° ͟ʖ ͡°)",
-  "ʕ•ᴥ•ʔ", "(ﾉ◕ヮ◕)ﾉ", "(づ｡◕‿◕｡)づ",
-  "¯\\_(ツ)_/¯", "(▀̿Ĺ̯▀̿ ̿)", "ᕙ(⇀‸↼)ᕗ",
-  "(ง'̀-'́)ง", "(⌐■_■)", "( ͡°( ͡° ͜ʖ ͡°) ͡°)",
+  "( ́° ˜ʶ ́°)", "( ́̃ ˜ʶ ́°)", "( ́  ̵ʶ ́°)",
+  "˕(•ᴥ•)˕", "(ﾉ◦ω◦)ﾉ", "((づ。◦‿◦。))づ",
+  "¯\\_((ツ))_/¯", "(́み▰(  み▰) ́)", "ᖜ(⇀※↻)ᖝ",
+  "((u('\u0304-'\u0304))u)", "(⋐ş_ş)", "( ́°( ́° ˜ʶ ́°) ́°)",
 }
 
 local lenny_pixels = {
@@ -385,7 +385,8 @@ local function ripple_brightness(gx, gy, rip)
   local diff = math.abs(dist - rip.r)
   if diff < 1.2 then
     local fade = 1 - (rip.age/18)
-    return math.floor(12 * fade * (1 - diff/1.2))
+    local brightness = math.floor(12 * fade * (1 - diff/1.2))
+    return math.max(0, math.min(15, brightness))  -- clamp to valid range
   end
   return 0
 end
@@ -801,7 +802,7 @@ function enc(n, d)
     elseif arp_on then
       arp_div_idx = math.max(1, math.min(#arp_divs,
         arp_div_idx + (d>0 and 1 or -1)))
-      arp_mode_idx = (arp_mode_idx % #arp_modes) + 1
+      arp_mode_idx = util.clamp(arp_mode_idx + (d>0 and 1 or -1), 1, #arp_modes)
       arp_updown_dir    = 1
       arp_converge_lo   = 1
       arp_converge_hi   = math.max(1, #held_order)
