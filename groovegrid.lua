@@ -9,6 +9,11 @@ engine.name = "GrooveGrid"
 local g = grid.connect()
 local m = midi.connect()
 
+-- OP-XY MIDI
+local opxy_out = nil
+local function opxy_note_on(note, vel) if opxy_out then opxy_out:note_on(note, vel, params:get("opxy_channel")) end end
+local function opxy_note_off(note) if opxy_out then opxy_out:note_off(note, 0, params:get("opxy_channel")) end end
+
 -- ─────────────────────────────────────────────
 -- LENNY FACES
 -- ─────────────────────────────────────────────
@@ -198,10 +203,12 @@ end
 -- ─────────────────────────────────────────────
 local function midi_note_on(note, vel)
   if m then m:note_on(note, vel or 100, MIDI_CH) end
+  opxy_note_on(note, vel or 100)
 end
 
 local function midi_note_off(note)
   if m then m:note_off(note, 0, MIDI_CH) end
+  opxy_note_off(note)
 end
 
 -- ─────────────────────────────────────────────
@@ -888,6 +895,12 @@ end
 -- ─────────────────────────────────────────────
 function init()
   math.randomseed(os.time())
+
+  params:add_separator("OP-XY MIDI")
+  params:add{type="number", id="opxy_device", name="OP-XY Device", min=1, max=16, default=2, action=function(v) opxy_out = midi.connect(v) end}
+  params:add{type="number", id="opxy_channel", name="OP-XY Channel", min=1, max=16, default=1}
+  opxy_out = midi.connect(params:get("opxy_device"))
+
   current_scale = scale_defs[math.random(#scale_defs)]
   current_lenny = lenny_faces[math.random(#lenny_faces)]
   grid_notes, grid_bright, note_release =
@@ -913,4 +926,5 @@ function cleanup()
   if m then
     for note = 0, 127 do m:note_off(note, 0, MIDI_CH) end
   end
+  if opxy_out then for ch=1,16 do opxy_out:cc(123,0,ch) end end
 end
