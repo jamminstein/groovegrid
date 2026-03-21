@@ -486,6 +486,7 @@ local function draw_pulse_row()
 end
 
 local function grid_redraw()
+  if not g.device then return end
   if not g then return end
   g:all(0)
   draw_voice_row()
