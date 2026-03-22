@@ -4,7 +4,7 @@
 -- chord progressions, wah, envelope shape
 -- ─────────────────────────────────────────────
 
-engine.name = "GrooveGrid"
+engine.name = "PolyPerc"
 
 local g = grid.connect()
 local m = midi.connect()
@@ -308,10 +308,10 @@ local function start_prog()
   prog_clock = clock.run(function()
     while true do
       for _, note in ipairs(prog_notes) do
-        engine.voice(current_voice)
-        engine.env_shape(env_shape)
+        -- engine.voice (PolyPerc)
+        -- engine.env_shape (PolyPerc)
         engine.amp(params:get("amp"))
-        engine.note_on(midi_to_hz(note), 0.15)
+        engine.hz(midi_to_hz(note))
         midi_note_on(note)
         clock.sleep(0.04)
       end
@@ -402,13 +402,13 @@ end
 -- NOTE TRIGGER
 -- ─────────────────────────────────────────────
 local function trigger_note(note, rel, gx, gy)
-  engine.voice(current_voice)
-  engine.env_shape(env_shape)
+  -- engine.voice (PolyPerc)
+  -- engine.env_shape (PolyPerc)
   engine.amp(params:get("amp"))
   -- apply per-voice octave offset
   local octave_shift = voice_octave_offsets[current_voice] * 12
   local shifted_note = note + octave_shift
-  engine.note_on(midi_to_hz(shifted_note), rel or 0.3)
+  engine.hz(midi_to_hz(shifted_note))
   midi_note_on(shifted_note)
   if gx and gy then add_ripple(gx, gy) end
 end
@@ -417,9 +417,9 @@ end
 -- WAH
 -- ─────────────────────────────────────────────
 local function update_wah()
-  engine.wah_rate(wah_rate)
-  engine.wah_depth(wah_depth)
-  engine.wah_base(wah_base)
+  -- engine.wah (PolyPerc)
+  -- engine.wah (PolyPerc)
+  -- engine.wah (PolyPerc)
 end
 
 -- ─────────────────────────────────────────────
@@ -691,7 +691,7 @@ function g.key(x, y, z)
       local v = math.ceil(x/4)
       if v >= 1 and v <= 4 then
         current_voice = v
-        engine.voice(current_voice)
+        -- engine.voice (PolyPerc)
         draw_voice_row()
         g:refresh()
         redraw()
@@ -869,7 +869,7 @@ local function setup_params()
   params:set_action("amp", function(v) engine.amp(v) end)
   params:add_control("res", "resonance",
     controlspec.new(0, 1, "lin", 0.01, 0.3, ""))
-  params:set_action("res", function(v) engine.res(v) end)
+  params:set_action("res", function(v) end)
   params:add_option("gg_clock_source", "clock source", {"internal","midi"}, 1)
   params:set_action("gg_clock_source", function(v)
     clock.source = (v==1 and "internal" or "midi")
@@ -897,6 +897,12 @@ end
 function init()
   math.randomseed(os.time())
 
+  -- PolyPerc defaults
+  engine.amp(0.5)
+  engine.release(0.3)
+  engine.cutoff(2500)
+  engine.pw(0.4)
+
   params:add_separator("OP-XY MIDI")
   params:add{type="number", id="opxy_device", name="OP-XY Device", min=1, max=16, default=2, action=function(v) opxy_out = midi.connect(v) end}
   params:add{type="number", id="opxy_channel", name="OP-XY Channel", min=1, max=16, default=1}
@@ -908,10 +914,10 @@ function init()
     generate_layout(current_scale, oct_offset)
   setup_params()
   clock.tempo = bpm
-  engine.voice(current_voice)
-  engine.env_shape(env_shape)
+  -- engine.voice (PolyPerc)
+  -- engine.env_shape (PolyPerc)
   engine.amp(0.8)
-  engine.res(0.3)
+  -- engine.res (PolyPerc)
   update_wah()
   start_pulse()
   start_ripple_clock()
