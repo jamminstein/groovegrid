@@ -589,7 +589,7 @@ end
 -- ─────────────────────────────────────────────
 function redraw()
   screen.clear()
-  screen.aa(1)
+  screen.aa(0)
   screen.font_face(1)
 
   screen.font_size(16)
