@@ -898,10 +898,13 @@ function init()
   math.randomseed(os.time())
 
   -- PolyPerc defaults
-  engine.amp(0.5)
-  engine.release(0.3)
-  engine.cutoff(2500)
+  engine.amp(0.8)
+  engine.release(0.4)
+  engine.cutoff(3000)
   engine.pw(0.4)
+  -- test tone
+  engine.hz(440)
+  print("groovegrid: test tone 440hz")
 
   params:add_separator("OP-XY MIDI")
   params:add{type="number", id="opxy_device", name="OP-XY Device", min=1, max=16, default=2, action=function(v) opxy_out = midi.connect(v) end}
@@ -921,6 +924,11 @@ function init()
   update_wah()
   start_pulse()
   start_ripple_clock()
+  -- auto-start progression so it plays without grid
+  prog_on = true
+  prog_index = math.random(#progressions)
+  prog_chord = 1
+  start_prog()
   redraw()
   if g then grid_flash_lenny(math.random(#lenny_pixels)) end
 end
